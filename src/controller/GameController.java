@@ -7,8 +7,11 @@ import model.GameStatus;
 import model.Position;
 import quiz.Quiz;
 import quiz.QuizBank;
+import score.Leaderboard;
+import score.ScoreEntry;
 import sound.SoundManager;
 import view.CellButton;
+import view.LeaderboardDialog;
 import view.MainFrame;
 
 import javax.swing.SwingUtilities;
@@ -31,24 +34,36 @@ public class GameController {
     private final Timer timer;
     private final SoundManager sound;
     private final QuizBank quizBank;
+    private final Leaderboard leaderboard;
+    private final String playerName;
 
     private Difficulty currentDifficulty;
     private int elapsedSeconds;
+    private int totalRunSeconds;
     private boolean timerStarted;
 
-    public GameController(Game game, MainFrame view) {
+    public GameController(Game game, MainFrame view, String playerName,
+                          Leaderboard leaderboard, Difficulty initialDifficulty) {
         this.game = game;
         this.view = view;
+        this.playerName = ScoreEntry.sanitizeName(playerName);
+        this.leaderboard = (leaderboard != null) ? leaderboard : new Leaderboard();
         this.timer = new Timer(1000, e -> onTimerTick());
         this.sound = new SoundManager();
         this.quizBank = new QuizBank(new Random());
 
+        Difficulty start = (initialDifficulty != null) ? initialDifficulty : selectedDifficulty();
+        // Đặt combo trước khi gắn listener để không kích hoạt tạo ván hai lần.
+        view.setSelectedModeIndex(start.ordinal());
+        view.setPlayerName(this.playerName);
+
         view.addNewGameListener(e -> startRun(selectedDifficulty()));
         view.addDifficultyListener(e -> startRun(selectedDifficulty()));
+        view.addLeaderboardListener(e -> showLeaderboard());
         view.addSoundToggleListener(e -> sound.setEnabled(view.isSoundEnabled()));
         sound.setEnabled(view.isSoundEnabled());
 
-        startRun(selectedDifficulty());
+        startRun(start);
     }
 
     public void dispose() {
@@ -68,6 +83,7 @@ public class GameController {
     private void startRun(Difficulty difficulty) {
         stopTimer();
         elapsedSeconds = 0;
+        totalRunSeconds = 0;
         timerStarted = false;
 
         currentDifficulty = difficulty;
@@ -226,12 +242,32 @@ public class GameController {
         sound.playWin();
 
         int clearedLevel = game.getLevel();
+        int levelSeconds = elapsedSeconds;
+        totalRunSeconds += levelSeconds;
+        recordScore(clearedLevel);
+
         if (clearedLevel >= Difficulty.MAX_LEVEL) {
-            view.showRunCompleteMessage(currentDifficulty.getDisplayName(), elapsedSeconds);
+            view.showRunCompleteMessage(currentDifficulty.getDisplayName(), levelSeconds);
+            showLeaderboard();
         } else {
-            view.showLevelClearMessage(clearedLevel, elapsedSeconds);
+            view.showLevelClearMessage(clearedLevel, levelSeconds);
             advanceToNextLevel();
         }
+    }
+
+    /**
+     * Ghi thành tích sau mỗi màn đã qua: số màn, tổng thời gian cộng dồn,
+     * chế độ và số bom của màn cao nhất đạt được.
+     */
+    private void recordScore(int clearedLevel) {
+        ScoreEntry entry = new ScoreEntry(playerName,
+                currentDifficulty.getDisplayName(), clearedLevel, totalRunSeconds,
+                currentDifficulty.getMinesForLevel(clearedLevel), System.currentTimeMillis());
+        leaderboard.submit(entry);
+    }
+
+    private void showLeaderboard() {
+        LeaderboardDialog.show(view, leaderboard.toDisplayRows(Leaderboard.MAX_ROWS));
     }
 
     private void showCell(int row, int col) {
@@ -240,7 +276,7 @@ public class GameController {
         boolean mine = game.isMine(row, col) && (over || state == CellState.REVEALED);
         view.showCell(row, col, toViewState(state), mine,
                 game.isExploded(row, col), game.isWrongFlag(row, col),
-                game.isDefused(row, col));
+                game.isDefused(row, col), game.getAdjacentMines(row, col));
     }
 
     private void showAllCells() {

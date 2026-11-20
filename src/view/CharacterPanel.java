@@ -23,6 +23,7 @@ public class CharacterPanel extends JPanel {
     private int level = 1;
     private int maxLevel = 10;
     private String modeName = "Beginner";
+    private String playerName = "";
 
     public CharacterPanel() {
         setOpaque(true);
@@ -35,6 +36,11 @@ public class CharacterPanel extends JPanel {
         this.level = level;
         this.maxLevel = Math.max(1, maxLevel);
         this.modeName = (modeName != null) ? modeName : "";
+        repaint();
+    }
+
+    public void setPlayerName(String playerName) {
+        this.playerName = (playerName != null) ? playerName : "";
         repaint();
     }
 
@@ -80,10 +86,15 @@ public class CharacterPanel extends JPanel {
     private void paintLabels(Graphics2D g2, int w) {
         g2.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
         g2.setColor(new Color(30, 70, 100));
-        drawCentered(g2, modeName, w, 22);
+        drawCentered(g2, playerName, w, 20);
+
+        g2.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        g2.setColor(new Color(55, 90, 110));
+        drawCentered(g2, modeName, w, 39);
 
         g2.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 17));
-        drawCentered(g2, "Màn " + level + "/" + maxLevel, w, 48);
+        g2.setColor(new Color(30, 70, 100));
+        drawCentered(g2, "Màn " + level + "/" + maxLevel, w, 64);
     }
 
     private void paintHearts(Graphics2D g2, int w) {
@@ -91,7 +102,7 @@ public class CharacterPanel extends JPanel {
         int gap = 5;
         int totalWidth = maxLives * size + (maxLives - 1) * gap;
         int x = (w - totalWidth) / 2;
-        int y = 64;
+        int y = 76;
         for (int i = 0; i < maxLives; i++) {
             Color color = (i < lives) ? new Color(220, 45, 60) : new Color(150, 150, 150);
             drawHeart(g2, x + i * (size + gap), y, size, color);

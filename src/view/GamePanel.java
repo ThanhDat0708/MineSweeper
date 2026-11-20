@@ -50,10 +50,10 @@ public class GamePanel extends JPanel {
     }
 
     public void showCell(int row, int col, CellButton.State state, boolean mine,
-                         boolean exploded, boolean wrongFlag, boolean defused) {
+                         boolean exploded, boolean wrongFlag, boolean defused, int adjacent) {
         if (row < 0 || row >= rows || col < 0 || col >= cols) {
             return;
         }
-        buttons[row][col].setCellData(state, mine, exploded, wrongFlag, defused);
+        buttons[row][col].setCellData(state, mine, exploded, wrongFlag, defused, adjacent);
     }
 }

@@ -34,6 +34,7 @@ public class MainFrame extends JFrame {
     private final JLabel mineLabel;
     private final JLabel timeLabel;
     private final JButton newGameButton;
+    private final JButton leaderboardButton;
     private final JComboBox<String> modeBox;
     private final JCheckBox soundBox;
 
@@ -50,6 +51,7 @@ public class MainFrame extends JFrame {
         timeLabel.setToolTipText("Thời gian (giây)");
 
         newGameButton = new JButton("New Game");
+        leaderboardButton = new JButton("Xếp hạng");
         modeBox = new JComboBox<>(MODE_NAMES);
         modeBox.setSelectedIndex(0);
         soundBox = new JCheckBox("Âm thanh", true);
@@ -59,6 +61,7 @@ public class MainFrame extends JFrame {
         topBar.add(newGameButton);
         topBar.add(timeLabel);
         topBar.add(modeBox);
+        topBar.add(leaderboardButton);
         topBar.add(soundBox);
 
         JPanel boardArea = new JPanel(new BorderLayout());
@@ -109,12 +112,28 @@ public class MainFrame extends JFrame {
     }
 
     public void showCell(int row, int col, CellButton.State state, boolean mine,
-                         boolean exploded, boolean wrongFlag, boolean defused) {
-        gamePanel.showCell(row, col, state, mine, exploded, wrongFlag, defused);
+                         boolean exploded, boolean wrongFlag, boolean defused, int adjacent) {
+        gamePanel.showCell(row, col, state, mine, exploded, wrongFlag, defused, adjacent);
     }
 
     public int getSelectedModeIndex() {
         return modeBox.getSelectedIndex();
+    }
+
+    /** Đặt chế độ đang chọn mà không cần người dùng thao tác trên combo. */
+    public void setSelectedModeIndex(int index) {
+        if (index >= 0 && index < MODE_NAMES.length) {
+            modeBox.setSelectedIndex(index);
+        }
+    }
+
+    /** Hiển thị tên người chơi trên tiêu đề và bảng nhân vật. */
+    public void setPlayerName(String playerName) {
+        String name = (playerName != null) ? playerName.trim() : "";
+        characterPanel.setPlayerName(name);
+        setTitle(name.isEmpty()
+                ? "Minesweeper - Khu rừng bom"
+                : "Minesweeper - Khu rừng bom - " + name);
     }
 
     public void addNewGameListener(ActionListener listener) {
@@ -123,6 +142,10 @@ public class MainFrame extends JFrame {
 
     public void addDifficultyListener(ActionListener listener) {
         modeBox.addActionListener(listener);
+    }
+
+    public void addLeaderboardListener(ActionListener listener) {
+        leaderboardButton.addActionListener(listener);
     }
 
     public void addSoundToggleListener(ActionListener listener) {

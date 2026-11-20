@@ -4,13 +4,15 @@ import javax.swing.JButton;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
 import java.awt.RenderingHints;
 
 /**
- * Một ô của khu rừng. Không hiển thị số nữa: ô ẩn là cỏ cây, ô mở là đất trống.
+ * Một ô của khu rừng: ô ẩn là cỏ cây, ô mở là đất trống kèm số bom kề (1-8).
  * Bom, cờ, bom đã gỡ và bom phát nổ đều được vẽ bằng Graphics2D.
  */
 public class CellButton extends JButton {
@@ -35,6 +37,18 @@ public class CellButton extends JButton {
     private static final Color EXPLODED_FILL = new Color(214, 69, 65);
     private static final Color FLAG_RED = new Color(220, 30, 30);
 
+    /** Màu số 1-8 theo quy ước Minesweeper (theo chỉ số adjacent - 1). */
+    private static final Color[] NUMBER_COLORS = {
+            new Color(30, 80, 220),    // 1 xanh dương
+            new Color(30, 140, 50),    // 2 xanh lá
+            new Color(210, 40, 40),    // 3 đỏ
+            new Color(20, 30, 110),    // 4 xanh navy
+            new Color(130, 55, 35),    // 5 nâu đỏ
+            new Color(20, 140, 140),   // 6 teal
+            Color.BLACK,               // 7 đen
+            new Color(100, 100, 100)   // 8 xám
+    };
+
     private final int row;
     private final int col;
 
@@ -43,6 +57,7 @@ public class CellButton extends JButton {
     private boolean exploded;
     private boolean wrongFlag;
     private boolean defused;
+    private int adjacent;
 
     public CellButton(int row, int col) {
         this.row = row;
@@ -69,12 +84,13 @@ public class CellButton extends JButton {
     }
 
     public void setCellData(State state, boolean mine, boolean exploded,
-                            boolean wrongFlag, boolean defused) {
+                            boolean wrongFlag, boolean defused, int adjacent) {
         this.state = state;
         this.mine = mine;
         this.exploded = exploded;
         this.wrongFlag = wrongFlag;
         this.defused = defused;
+        this.adjacent = Math.max(0, Math.min(8, adjacent));
         repaint();
     }
 
@@ -132,7 +148,22 @@ public class CellButton extends JButton {
             }
         } else {
             drawDirtTexture(g2, w, h);
+            drawAdjacentNumber(g2, w, h);
         }
+    }
+
+    /** Vẽ số bom kề trên ô đất trống để người chơi suy luận vị trí bom. */
+    private void drawAdjacentNumber(Graphics2D g2, int w, int h) {
+        if (adjacent <= 0) {
+            return;
+        }
+        String text = String.valueOf(adjacent);
+        g2.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 17));
+        g2.setColor(NUMBER_COLORS[Math.min(adjacent, 8) - 1]);
+        FontMetrics fm = g2.getFontMetrics();
+        int x = (w - fm.stringWidth(text)) / 2;
+        int y = (h - fm.getHeight()) / 2 + fm.getAscent();
+        g2.drawString(text, x, y);
     }
 
     private void drawGrassTexture(Graphics2D g2, int w, int h) {

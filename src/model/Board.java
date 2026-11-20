@@ -8,7 +8,7 @@ import java.util.Random;
 
 /**
  * Bàn cờ Minesweeper phiên bản "phiêu lưu":
- * - Không hiển thị số mìn kề (phần hiển thị do view lo).
+ * - Số mìn kề do view hiển thị sau khi ô được mở.
  * - Khi mở trúng bom, ván chơi tạm dừng để trả lời câu đố (pending quiz).
  * - Trả lời đúng: quả bom được vô hiệu hóa.
  * - Trả lời sai: bom nổ và người chơi mất 1 mạng.
