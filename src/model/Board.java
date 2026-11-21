@@ -1,5 +1,6 @@
 package model;
 
+import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -14,7 +15,9 @@ import java.util.Random;
  * - Trả lời sai: bom nổ và người chơi mất 1 mạng.
  * - Có 3 mạng; hết mạng thì thua.
  */
-public final class Board {
+public final class Board implements Serializable {
+
+    private static final long serialVersionUID = 2L;
 
     /** Số mạng mặc định của mỗi màn. */
     public static final int DEFAULT_LIVES = 3;
@@ -80,7 +83,8 @@ public final class Board {
             return revealed;
         }
         Cell start = cells[row][col];
-        if (start.getState() != CellState.HIDDEN) {
+        // Ô đã mở hoặc đang cắm cờ thì không mở. Ô đánh dấu "?" vẫn mở được.
+        if (start.getState() == CellState.REVEALED || start.getState() == CellState.FLAGGED) {
             return revealed;
         }
 
@@ -100,7 +104,9 @@ public final class Board {
         while (!queue.isEmpty()) {
             Position p = queue.poll();
             Cell cell = cells[p.row()][p.col()];
-            if (cell.getState() != CellState.HIDDEN || cell.isMine()) {
+            if (cell.getState() == CellState.FLAGGED
+                    || cell.getState() == CellState.REVEALED
+                    || cell.isMine()) {
                 continue;
             }
             cell.setState(CellState.REVEALED);
@@ -172,6 +178,116 @@ public final class Board {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Chu kỳ đánh dấu của chuột phải: HIDDEN -> FLAGGED -> QUESTION -> HIDDEN.
+     * Chỉ cờ (FLAGGED) mới được tính vào bộ đếm mìn còn lại.
+     *
+     * @return trạng thái mới, hoặc null nếu ô không thể đánh dấu
+     */
+    public CellState cycleMark(int row, int col) {
+        if (isGameOver() || pendingMine != null || !inBounds(row, col)) {
+            return null;
+        }
+        Cell cell = cells[row][col];
+        switch (cell.getState()) {
+            case HIDDEN:
+                cell.setState(CellState.FLAGGED);
+                flagCount++;
+                return CellState.FLAGGED;
+            case FLAGGED:
+                cell.setState(CellState.QUESTION);
+                flagCount--;
+                return CellState.QUESTION;
+            case QUESTION:
+                cell.setState(CellState.HIDDEN);
+                return CellState.HIDDEN;
+            case REVEALED:
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Chord: nếu số cờ quanh một ô đã mở bằng đúng số bom kề, mở toàn bộ
+     * các ô còn ẩn quanh nó. Trả về danh sách ô vừa mở.
+     */
+    public List<Position> chord(int row, int col) {
+        List<Position> changed = new ArrayList<>();
+        if (isGameOver() || pendingMine != null || !inBounds(row, col)) {
+            return changed;
+        }
+        Cell center = cells[row][col];
+        // Chỉ chord trên ô số đã mở. Bom đã gỡ/đã nổ cũng là REVEALED
+        // nhưng không hiển thị số nên không được phép chord.
+        if (center.getState() != CellState.REVEALED || center.isMine()
+                || center.getAdjacentMines() == 0) {
+            return changed;
+        }
+
+        int flags = 0;
+        for (int dr = -1; dr <= 1; dr++) {
+            for (int dc = -1; dc <= 1; dc++) {
+                int nr = row + dr;
+                int nc = col + dc;
+                if ((dr != 0 || dc != 0) && inBounds(nr, nc)
+                        && cells[nr][nc].getState() == CellState.FLAGGED) {
+                    flags++;
+                }
+            }
+        }
+        if (flags != center.getAdjacentMines()) {
+            return changed;
+        }
+
+        for (int dr = -1; dr <= 1; dr++) {
+            for (int dc = -1; dc <= 1; dc++) {
+                if (dr == 0 && dc == 0) {
+                    continue;
+                }
+                int nr = row + dr;
+                int nc = col + dc;
+                if (!inBounds(nr, nc)) {
+                    continue;
+                }
+                CellState state = cells[nr][nc].getState();
+                if (state == CellState.HIDDEN || state == CellState.QUESTION) {
+                    changed.addAll(reveal(nr, nc));
+                    if (pendingMine != null || isGameOver()) {
+                        return changed;
+                    }
+                }
+            }
+        }
+        return changed;
+    }
+
+    /**
+     * Gợi ý một ô an toàn còn ẩn. Khi chưa sinh mìn, mọi ô đều an toàn
+     * vì lần mở đầu tiên luôn được bảo vệ.
+     */
+    public Position findHint() {
+        if (isGameOver() || pendingMine != null) {
+            return null;
+        }
+        List<Position> safe = new ArrayList<>();
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                Cell cell = cells[r][c];
+                if (cell.getState() == CellState.REVEALED
+                        || cell.getState() == CellState.FLAGGED) {
+                    continue;
+                }
+                if (!minesPlaced || !cell.isMine()) {
+                    safe.add(new Position(r, c));
+                }
+            }
+        }
+        if (safe.isEmpty()) {
+            return null;
+        }
+        return safe.get(random.nextInt(safe.size()));
     }
 
     public int getRows() {
@@ -315,7 +431,10 @@ public final class Board {
                     continue;
                 }
                 Cell neighbor = cells[nr][nc];
-                if (neighbor.getState() == CellState.HIDDEN && !neighbor.isMine()) {
+                // "?" không phải cờ nên vẫn được Flood Fill mở như ô ẩn.
+                boolean openable = neighbor.getState() == CellState.HIDDEN
+                        || neighbor.getState() == CellState.QUESTION;
+                if (openable && !neighbor.isMine()) {
                     queue.add(new Position(nr, nc));
                 }
             }
@@ -333,10 +452,13 @@ public final class Board {
         }
         status = GameStatus.WON;
         // Tự cắm cờ những bom còn ẩn để bộ đếm về 0.
+        // Bỏ qua bom đã gỡ hoặc đã nổ vì chúng đang REVEALED và đã được
+        // tính riêng trong getRemainingMines (nếu cắm cờ lại sẽ bị trừ hai lần).
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
                 Cell cell = cells[r][c];
-                if (cell.isMine() && cell.getState() == CellState.HIDDEN) {
+                if (cell.isMine() && cell.getState() != CellState.FLAGGED
+                        && cell.getState() != CellState.REVEALED) {
                     cell.setState(CellState.FLAGGED);
                     flagCount++;
                 }

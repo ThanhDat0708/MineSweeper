@@ -1,5 +1,6 @@
 package model;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.Random;
 
@@ -7,7 +8,9 @@ import java.util.Random;
  * Facade duy nhất mà tầng controller được phép gọi.
  * Quản lý chế độ, màn hiện tại và bàn cờ của màn đó.
  */
-public final class Game {
+public final class Game implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private final Random random;
     private Difficulty difficulty;
@@ -61,6 +64,18 @@ public final class Game {
 
     public boolean toggleFlag(int row, int col) {
         return board.toggleFlag(row, col);
+    }
+
+    public CellState cycleMark(int row, int col) {
+        return board.cycleMark(row, col);
+    }
+
+    public List<Position> chord(int row, int col) {
+        return board.chord(row, col);
+    }
+
+    public Position findHint() {
+        return board.findHint();
     }
 
     public int getRows() {

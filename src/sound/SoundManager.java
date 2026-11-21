@@ -26,6 +26,7 @@ public final class SoundManager {
     });
 
     private volatile boolean enabled = true;
+    private volatile double volume = 0.8;
     private volatile long lastRevealAt;
 
     public void setEnabled(boolean enabled) {
@@ -34,6 +35,15 @@ public final class SoundManager {
 
     public boolean isEnabled() {
         return enabled;
+    }
+
+    /** Âm lượng tổng từ 0.0 (tắt tiếng) đến 1.0. */
+    public void setVolume(double volume) {
+        this.volume = Math.max(0.0, Math.min(1.0, volume));
+    }
+
+    public double getVolume() {
+        return volume;
     }
 
     public void playReveal() {
@@ -54,6 +64,34 @@ public final class SoundManager {
             return;
         }
         enqueue(() -> tone(1050, 35, 0.16));
+    }
+
+    public void playMark() {
+        if (!enabled) {
+            return;
+        }
+        enqueue(() -> tone(840, 30, 0.14));
+    }
+
+    public void playHint() {
+        if (!enabled) {
+            return;
+        }
+        enqueue(() -> sequence(new double[]{880.0, 1174.7}, 70, 18, 0.18));
+    }
+
+    public void playPause() {
+        if (!enabled) {
+            return;
+        }
+        enqueue(() -> tone(440, 70, 0.14));
+    }
+
+    public void playLose() {
+        if (!enabled) {
+            return;
+        }
+        enqueue(() -> sequence(new double[]{392.0, 329.6, 261.6}, 170, 30, 0.2));
     }
 
     public void playExplosion() {
@@ -91,11 +129,27 @@ public final class SoundManager {
     private void enqueue(Supplier<byte[]> generator) {
         executor.submit(() -> {
             try {
-                playRaw(generator.get());
+                playRaw(applyVolume(generator.get(), volume));
             } catch (LineUnavailableException | IllegalArgumentException ex) {
                 // Máy không có thiết bị âm thanh: bỏ qua để game vẫn chạy bình thường.
             }
         });
+    }
+
+    /** Nhân biên độ PCM 16-bit với âm lượng tổng. */
+    private static byte[] applyVolume(byte[] pcm, double gain) {
+        if (pcm.length == 0 || gain >= 0.999) {
+            return pcm;
+        }
+        double clampedGain = Math.max(0.0, Math.min(1.0, gain));
+        for (int i = 0; i + 1 < pcm.length; i += 2) {
+            short sample = (short) ((pcm[i] & 0xFF) | (pcm[i + 1] << 8));
+            int scaled = (int) Math.round(sample * clampedGain);
+            scaled = Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, scaled));
+            pcm[i] = (byte) (scaled & 0xFF);
+            pcm[i + 1] = (byte) ((scaled >> 8) & 0xFF);
+        }
+        return pcm;
     }
 
     private static void playRaw(byte[] pcm) throws LineUnavailableException {

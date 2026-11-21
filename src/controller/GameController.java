@@ -10,26 +10,28 @@ import quiz.QuizBank;
 import score.Leaderboard;
 import score.ScoreEntry;
 import sound.SoundManager;
-import view.CellButton;
+import view.BoardPanel;
+import view.CharacterPanel.Expression;
 import view.LeaderboardDialog;
 import view.MainFrame;
 
-import javax.swing.SwingUtilities;
 import javax.swing.Timer;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Random;
 
 /**
  * Cầu nối duy nhất giữa view và model.
- * Xử lý click, câu đố khi trúng bom, 3 mạng và chuyển màn.
+ * Xử lý click, chord, đánh dấu "?", gợi ý, tạm dừng, lưu/khôi phục,
+ * câu đố khi trúng bom, 3 mạng và chuyển màn.
  */
 public class GameController {
 
     private static final int MAX_TIME = 999;
+    private static final Path SAVE_FILE = Paths.get("savegame.dat");
 
-    private final Game game;
+    private final GameLogic logic;
     private final MainFrame view;
     private final Timer timer;
     private final SoundManager sound;
@@ -41,10 +43,11 @@ public class GameController {
     private int elapsedSeconds;
     private int totalRunSeconds;
     private boolean timerStarted;
+    private boolean pauseHeldTimer;
 
     public GameController(Game game, MainFrame view, String playerName,
                           Leaderboard leaderboard, Difficulty initialDifficulty) {
-        this.game = game;
+        this.logic = new GameLogic(game);
         this.view = view;
         this.playerName = ScoreEntry.sanitizeName(playerName);
         this.leaderboard = (leaderboard != null) ? leaderboard : new Leaderboard();
@@ -57,16 +60,45 @@ public class GameController {
         view.setSelectedModeIndex(start.ordinal());
         view.setPlayerName(this.playerName);
 
+        view.setBoardListener(new BoardPanel.Listener() {
+            @Override
+            public void onLeftClick(int row, int col) {
+                onLeftClickInternal(row, col);
+            }
+
+            @Override
+            public void onRightClick(int row, int col) {
+                onRightClickInternal(row, col);
+            }
+
+            @Override
+            public void onChord(int row, int col) {
+                onChordInternal(row, col);
+            }
+        });
+
         view.addNewGameListener(e -> startRun(selectedDifficulty()));
         view.addDifficultyListener(e -> startRun(selectedDifficulty()));
         view.addLeaderboardListener(e -> showLeaderboard());
         view.addSoundToggleListener(e -> sound.setEnabled(view.isSoundEnabled()));
+        view.addVolumeListener(e -> sound.setVolume(view.getVolume()));
+        view.addHintListener(e -> showHint());
+        view.addPauseListener(e -> togglePause());
+        view.addSaveListener(e -> saveProgress());
+        view.addLoadListener(e -> loadProgress());
+
         sound.setEnabled(view.isSoundEnabled());
+        sound.setVolume(view.getVolume());
 
         startRun(start);
     }
 
     public void dispose() {
+        if (logic.getStatus() == GameStatus.PLAYING && !logic.isQuizPending()) {
+            logic.save(SAVE_FILE, elapsedSeconds, totalRunSeconds, timerStarted);
+        }
+        // Dừng đồng hồ trước khi đóng cửa sổ để không còn tick sau khi dispose.
+        timer.stop();
         sound.dispose();
     }
 
@@ -85,10 +117,12 @@ public class GameController {
         elapsedSeconds = 0;
         totalRunSeconds = 0;
         timerStarted = false;
+        pauseHeldTimer = false;
 
         currentDifficulty = difficulty;
-        game.newGame(difficulty, 1);
+        logic.newGame(difficulty, 1);
         refreshBoard();
+        view.setExpression(Expression.NORMAL, 0);
     }
 
     /** Sang màn kế tiếp, giữ nguyên số mạng còn lại. */
@@ -96,57 +130,44 @@ public class GameController {
         stopTimer();
         elapsedSeconds = 0;
         timerStarted = false;
-        game.advanceLevel();
+        pauseHeldTimer = false;
+        logic.advanceLevel();
         refreshBoard();
+        view.setExpression(Expression.NORMAL, 0);
     }
 
     private void refreshBoard() {
-        view.rebuildGrid(game.getRows(), game.getCols());
-        attachMouseHandler();
+        view.rebuildGrid(logic.getRows(), logic.getCols());
+        view.setPaused(false);
+        view.clearHint();
         updateHud();
-        view.setMineCounter(game.getRemainingMines());
+        view.setMineCounter(logic.getRemainingMines());
         view.setTime(0);
         view.refreshLayout();
     }
 
     private void updateHud() {
-        view.setHud(game.getLives(), game.getMaxLives(), game.getLevel(),
+        view.setHud(logic.getLives(), logic.getMaxLives(), logic.getLevel(),
                 Difficulty.MAX_LEVEL, currentDifficulty.getDisplayName());
     }
 
-    private void attachMouseHandler() {
-        // Chuột trái mở ô, chuột phải cắm/gỡ cờ (dùng MouseAdapter, không dùng ActionListener).
-        MouseAdapter handler = new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
-                boolean left = SwingUtilities.isLeftMouseButton(e);
-                boolean right = SwingUtilities.isRightMouseButton(e);
-                if (!left && !right) {
-                    return;
-                }
-                CellButton button = (CellButton) e.getSource();
-                if (right) {
-                    onRightClick(button.getRow(), button.getCol());
-                } else {
-                    onLeftClick(button.getRow(), button.getCol());
-                }
-            }
-        };
-        view.setCellMouseListener(handler);
+    private boolean blocked() {
+        return logic.isPaused() || isGameOver() || logic.isQuizPending();
     }
 
-    private void onLeftClick(int row, int col) {
-        if (isGameOver() || game.isQuizPending()) {
+    private void onLeftClickInternal(int row, int col) {
+        if (blocked()) {
             return;
         }
-        if (game.getCellState(row, col) != CellState.HIDDEN) {
+        CellState state = logic.getCellState(row, col);
+        if (state == CellState.FLAGGED || state == CellState.REVEALED) {
             return;
         }
 
-        List<Position> changed = game.reveal(row, col);
+        List<Position> changed = logic.reveal(row, col);
 
         // Trúng bom: mở hộp thoại câu đố thay vì thua ngay.
-        if (game.isQuizPending()) {
+        if (logic.isQuizPending()) {
             handleQuiz();
             return;
         }
@@ -154,24 +175,96 @@ public class GameController {
             return;
         }
 
-        if (game.getStatus() == GameStatus.PLAYING && !timerStarted) {
+        if (logic.getStatus() == GameStatus.PLAYING && !timerStarted) {
             startTimer();
         }
 
-        if (game.getStatus() == GameStatus.LOST) {
+        if (logic.getStatus() == GameStatus.LOST) {
             handleLose();
             return;
         }
-        if (game.getStatus() == GameStatus.WON) {
+        if (logic.getStatus() == GameStatus.WON) {
             handleLevelWin();
             return;
         }
 
         sound.playReveal();
+        view.clearHint();
+        int maxAdjacent = 0;
         for (Position position : changed) {
-            showCell(position.row(), position.col());
+            showCell(position.row(), position.col(), true);
+            if (!logic.isMine(position.row(), position.col())) {
+                maxAdjacent = Math.max(maxAdjacent,
+                        logic.getAdjacentMines(position.row(), position.col()));
+            }
         }
-        view.setMineCounter(game.getRemainingMines());
+        view.setMineCounter(logic.getRemainingMines());
+        view.setExpression(maxAdjacent >= 5 ? Expression.SCARED : Expression.HAPPY);
+    }
+
+    private void onRightClickInternal(int row, int col) {
+        if (blocked()) {
+            return;
+        }
+        CellState newState = logic.cycleMark(row, col);
+        if (newState == null) {
+            return;
+        }
+        if (newState == CellState.FLAGGED) {
+            sound.playFlag();
+        } else {
+            sound.playMark();
+        }
+        showCell(row, col, false);
+        view.clearHint();
+        view.setMineCounter(logic.getRemainingMines());
+        view.setExpression(Expression.NORMAL, 0);
+    }
+
+    private void onChordInternal(int row, int col) {
+        if (blocked()) {
+            return;
+        }
+        List<Position> changed = logic.chord(row, col);
+
+        // Chord có thể mở vài ô an toàn rồi mới chạm bom. Cần vẽ các ô đó
+        // ngay cả khi câu đố đang chờ, tránh ô đã mở nhưng vẫn hiện như ẩn.
+        if (!changed.isEmpty()) {
+            for (Position position : changed) {
+                showCell(position.row(), position.col(), true);
+            }
+            view.setMineCounter(logic.getRemainingMines());
+        }
+
+        if (logic.isQuizPending()) {
+            handleQuiz();
+            return;
+        }
+        if (changed.isEmpty()) {
+            return;
+        }
+        if (logic.getStatus() == GameStatus.PLAYING && !timerStarted) {
+            startTimer();
+        }
+        if (logic.getStatus() == GameStatus.LOST) {
+            handleLose();
+            return;
+        }
+        if (logic.getStatus() == GameStatus.WON) {
+            handleLevelWin();
+            return;
+        }
+
+        sound.playReveal();
+        view.clearHint();
+        int maxAdjacent = 0;
+        for (Position position : changed) {
+            if (!logic.isMine(position.row(), position.col())) {
+                maxAdjacent = Math.max(maxAdjacent,
+                        logic.getAdjacentMines(position.row(), position.col()));
+            }
+        }
+        view.setExpression(maxAdjacent >= 5 ? Expression.SCARED : Expression.HAPPY);
     }
 
     /**
@@ -185,63 +278,65 @@ public class GameController {
             timer.stop(); // tạm dừng đồng hồ trong lúc trả lời
         }
 
-        Quiz quiz = quizBank.nextForLevel(game.getLevel());
+        Position pending = logic.getPendingMine();
+        Quiz quiz = quizBank.nextForLevel(logic.getLevel());
         int chosen = view.askQuiz(quiz.question(), quiz.options());
         boolean correct = chosen == quiz.correctIndex();
 
-        List<Position> changed = game.resolveQuiz(correct);
-        for (Position position : changed) {
-            showCell(position.row(), position.col());
+        if (!correct && pending != null) {
+            view.showExplosion(pending.row(), pending.col());
+            sound.playExplosion();
+            view.setExpression(Expression.CRYING, 0);
         }
-        view.setMineCounter(game.getRemainingMines());
+
+        List<Position> changed = logic.resolveQuiz(correct);
+        for (Position position : changed) {
+            showCell(position.row(), position.col(), true);
+        }
+        view.setMineCounter(logic.getRemainingMines());
         updateHud();
 
         if (correct) {
             sound.playDefuse();
+            view.setExpression(Expression.HAPPY);
             view.showInfoMessage("Chính xác! Quả bom đã được vô hiệu hóa.");
         } else {
-            sound.playExplosion();
-            if (game.getStatus() == GameStatus.LOST) {
+            if (logic.getStatus() == GameStatus.LOST) {
                 handleLose();
                 return;
             }
-            view.showInfoMessage("Sai rồi! Bom nổ và bạn còn " + game.getLives() + " mạng.");
+            view.showInfoMessage("Sai rồi! Bom nổ và bạn còn " + logic.getLives() + " mạng.");
         }
 
         if (timerWasRunning && !isGameOver()) {
             timer.start();
+            timerStarted = true;
         }
-    }
-
-    private void onRightClick(int row, int col) {
-        if (isGameOver() || game.isQuizPending()) {
-            return;
-        }
-        boolean changed = game.toggleFlag(row, col);
-        if (!changed) {
-            return;
-        }
-        sound.playFlag();
-        showCell(row, col);
-        view.setMineCounter(game.getRemainingMines());
     }
 
     private void handleLose() {
         stopTimer();
-        showAllCells();
-        view.setMineCounter(game.getRemainingMines());
+        pauseHeldTimer = false;
+        showAllCells(false);
+        view.setMineCounter(logic.getRemainingMines());
         updateHud();
+        view.setPaused(false);
+        view.setExpression(Expression.CRYING, 0);
+        sound.playLose();
         view.showLoseMessage();
     }
 
     private void handleLevelWin() {
         stopTimer();
-        showAllCells();
-        view.setMineCounter(game.getRemainingMines());
+        pauseHeldTimer = false;
+        showAllCells(false);
+        view.setMineCounter(logic.getRemainingMines());
         updateHud();
+        view.setPaused(false);
+        view.setExpression(Expression.WIN, 0);
         sound.playWin();
 
-        int clearedLevel = game.getLevel();
+        int clearedLevel = logic.getLevel();
         int levelSeconds = elapsedSeconds;
         totalRunSeconds += levelSeconds;
         recordScore(clearedLevel);
@@ -270,32 +365,110 @@ public class GameController {
         LeaderboardDialog.show(view, leaderboard.toDisplayRows(Leaderboard.MAX_ROWS));
     }
 
-    private void showCell(int row, int col) {
-        CellState state = game.getCellState(row, col);
-        boolean over = isGameOver();
-        boolean mine = game.isMine(row, col) && (over || state == CellState.REVEALED);
-        view.showCell(row, col, toViewState(state), mine,
-                game.isExploded(row, col), game.isWrongFlag(row, col),
-                game.isDefused(row, col), game.getAdjacentMines(row, col));
+    private void togglePause() {
+        if (isGameOver() || logic.isQuizPending()) {
+            return;
+        }
+        boolean paused = logic.togglePause();
+        view.setPaused(paused);
+        if (paused) {
+            pauseHeldTimer = timer.isRunning();
+            timer.stop();
+        } else {
+            if (pauseHeldTimer && !isGameOver()) {
+                timer.start();
+                timerStarted = true;
+            }
+            pauseHeldTimer = false;
+        }
+        sound.playPause();
     }
 
-    private void showAllCells() {
-        for (int r = 0; r < game.getRows(); r++) {
-            for (int c = 0; c < game.getCols(); c++) {
-                showCell(r, c);
+    private void showHint() {
+        if (blocked()) {
+            return;
+        }
+        Position hint = logic.findHint();
+        if (hint == null) {
+            view.showInfoMessage("Không còn ô an toàn nào để gợi ý.");
+            return;
+        }
+        view.showHint(hint.row(), hint.col());
+        view.setExpression(Expression.NORMAL, 0);
+        sound.playHint();
+    }
+
+    private void saveProgress() {
+        boolean saved = logic.save(SAVE_FILE, elapsedSeconds, totalRunSeconds, timerStarted);
+        if (saved) {
+            sound.playMark();
+            view.showInfoMessage("Đã lưu tiến trình vào " + SAVE_FILE.getFileName() + ".");
+        } else {
+            view.showInfoMessage("Không thể lưu tiến trình.");
+        }
+    }
+
+    private void loadProgress() {
+        if (!logic.load(SAVE_FILE)) {
+            view.showInfoMessage("Không tìm thấy tiến trình đã lưu hoặc file bị hỏng.");
+            return;
+        }
+
+        stopTimer();
+        pauseHeldTimer = false;
+        timerStarted = false;
+        elapsedSeconds = logic.getLoadedElapsedSeconds();
+        totalRunSeconds = logic.getLoadedTotalSeconds();
+        currentDifficulty = logic.getDifficulty();
+
+        view.setSelectedModeIndex(currentDifficulty.ordinal());
+        view.rebuildGrid(logic.getRows(), logic.getCols());
+        view.setPaused(false);
+        view.clearHint();
+        updateHud();
+        view.setMineCounter(logic.getRemainingMines());
+        view.setTime(elapsedSeconds);
+        showAllCells(false);
+        view.setExpression(Expression.NORMAL, 0);
+        view.refreshLayout();
+
+        if (logic.wasLoadedTimerStarted()
+                && logic.getStatus() == GameStatus.PLAYING && !isGameOver()) {
+            timerStarted = true;
+            timer.start();
+        }
+        sound.playMark();
+        view.showInfoMessage("Đã tải tiến trình đã lưu.");
+    }
+
+    private void showCell(int row, int col, boolean animate) {
+        CellState state = logic.getCellState(row, col);
+        boolean over = isGameOver();
+        boolean mine = logic.isMine(row, col) && (over || state == CellState.REVEALED);
+        view.showCell(row, col, toViewMark(state), mine,
+                logic.isExploded(row, col), logic.isWrongFlag(row, col),
+                logic.isDefused(row, col), logic.getAdjacentMines(row, col), animate);
+    }
+
+    private void showAllCells(boolean animate) {
+        for (int r = 0; r < logic.getRows(); r++) {
+            for (int c = 0; c < logic.getCols(); c++) {
+                showCell(r, c, animate);
             }
         }
     }
 
-    private static CellButton.State toViewState(CellState state) {
+    private static BoardPanel.Mark toViewMark(CellState state) {
         switch (state) {
             case REVEALED:
-                return CellButton.State.REVEALED;
+                return BoardPanel.Mark.REVEALED;
             case FLAGGED:
-                return CellButton.State.FLAGGED;
+                return BoardPanel.Mark.FLAGGED;
+            case QUESTION:
+                return BoardPanel.Mark.QUESTION;
             case HIDDEN:
             default:
-                return CellButton.State.HIDDEN;
+                return BoardPanel.Mark.HIDDEN;
         }
     }
 
@@ -327,7 +500,7 @@ public class GameController {
     }
 
     private boolean isGameOver() {
-        GameStatus status = game.getStatus();
+        GameStatus status = logic.getStatus();
         return status == GameStatus.WON || status == GameStatus.LOST;
     }
 }

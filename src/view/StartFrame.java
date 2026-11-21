@@ -1,18 +1,16 @@
 package view;
 
-import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
-import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
-import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -22,6 +20,7 @@ import java.awt.Graphics2D;
 import java.awt.GridBagLayout;
 import java.awt.RenderingHints;
 import java.awt.event.ActionListener;
+import java.awt.geom.RoundRectangle2D;
 
 /**
  * Màn hình bắt đầu: nhập tên người chơi, chọn độ khó, vào game hoặc xem bảng xếp hạng.
@@ -34,17 +33,20 @@ public class StartFrame extends JFrame {
     /** Tên chế độ hiển thị; chỉ số khớp thứ tự Difficulty.values() ở tầng model. */
     private static final String[] MODE_NAMES = {"Beginner", "Intermediate", "Expert"};
 
+    private final ThemeManager themeManager = new ThemeManager();
     private final JTextField nameField = new JTextField(16);
     private final JComboBox<String> modeBox = new JComboBox<>(MODE_NAMES);
-    private final JButton startButton = new JButton("Bắt đầu");
-    private final JButton leaderboardButton = new JButton("Bảng xếp hạng");
+    private final RoundedButton startButton =
+            new RoundedButton("Bắt đầu", themeManager, RoundedButton.Variant.PRIMARY);
+    private final RoundedButton leaderboardButton =
+            new RoundedButton("Bảng xếp hạng", themeManager, RoundedButton.Variant.SECONDARY);
 
     public StartFrame() {
         super("Minesweeper - Khu rừng bom");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setResizable(false);
 
-        BackgroundPanel content = new BackgroundPanel();
+        BackgroundPanel content = new BackgroundPanel(themeManager);
         content.setLayout(new GridBagLayout());
         content.add(buildCard());
         setContentPane(content);
@@ -55,44 +57,40 @@ public class StartFrame extends JFrame {
     }
 
     private JPanel buildCard() {
-        JPanel card = new JPanel();
+        CardPanel card = new CardPanel(themeManager);
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setOpaque(true);
-        card.setBackground(new Color(255, 255, 255, 235));
-        card.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(110, 175, 85), 2),
-                new EmptyBorder(24, 36, 24, 36)));
+        card.setBorder(new EmptyBorder(24, 36, 24, 36));
 
         JLabel title = new JLabel("DÒ MÌN");
-        title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 32));
+        title.setFont(ThemeManager.font(Font.BOLD, 32));
         title.setForeground(new Color(35, 95, 55));
         title.setAlignmentX(CENTER_ALIGNMENT);
 
         JLabel subtitle = new JLabel("Khu rừng bom");
-        subtitle.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 15));
+        subtitle.setFont(ThemeManager.font(Font.PLAIN, 15));
         subtitle.setForeground(new Color(80, 110, 90));
         subtitle.setAlignmentX(CENTER_ALIGNMENT);
 
         JLabel nameLabel = new JLabel("Tên người chơi");
-        nameLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+        nameLabel.setFont(ThemeManager.font(Font.BOLD, 13));
         nameLabel.setForeground(new Color(45, 80, 60));
         nameLabel.setAlignmentX(LEFT_ALIGNMENT);
 
-        nameField.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 15));
+        nameField.setFont(ThemeManager.font(Font.PLAIN, 15));
         nameField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
         nameField.setAlignmentX(LEFT_ALIGNMENT);
 
         JLabel modeLabel = new JLabel("Độ khó");
-        modeLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+        modeLabel.setFont(ThemeManager.font(Font.BOLD, 13));
         modeLabel.setForeground(new Color(45, 80, 60));
         modeLabel.setAlignmentX(LEFT_ALIGNMENT);
 
-        modeBox.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
+        modeBox.setFont(ThemeManager.font(Font.PLAIN, 14));
         modeBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
         modeBox.setAlignmentX(LEFT_ALIGNMENT);
 
-        styleButton(startButton, new Color(45, 150, 75));
-        styleButton(leaderboardButton, new Color(65, 110, 165));
+        styleButton(startButton);
+        styleButton(leaderboardButton);
 
         card.add(title);
         card.add(Box.createVerticalStrut(4));
@@ -112,14 +110,9 @@ public class StartFrame extends JFrame {
         return card;
     }
 
-    private static void styleButton(JButton button, Color background) {
+    private static void styleButton(RoundedButton button) {
         button.setAlignmentX(CENTER_ALIGNMENT);
-        button.setBackground(background);
-        button.setForeground(Color.WHITE);
-        button.setFocusPainted(false);
-        button.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
         button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
-        button.setHorizontalAlignment(SwingConstants.CENTER);
     }
 
     public String getPlayerName() {
@@ -152,6 +145,13 @@ public class StartFrame extends JFrame {
 
         private static final long serialVersionUID = 1L;
 
+        private final ThemeManager theme;
+
+        BackgroundPanel(ThemeManager theme) {
+            this.theme = theme;
+            setOpaque(true);
+        }
+
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
@@ -159,22 +159,76 @@ public class StartFrame extends JFrame {
             try {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
                         RenderingHints.VALUE_ANTIALIAS_ON);
+                ThemeManager.Palette p = theme.getPalette();
                 int w = getWidth();
                 int h = getHeight();
 
-                g2.setPaint(new GradientPaint(0, 0, new Color(168, 216, 238),
-                        0, h * 0.72f, new Color(238, 248, 255)));
+                g2.setPaint(new GradientPaint(0, 0, p.skyTop(), 0, h * 0.72f, p.skyBottom()));
                 g2.fillRect(0, 0, w, h);
 
-                g2.setColor(new Color(150, 200, 140));
+                g2.setColor(new Color(255, 240, 170, 100));
+                g2.fillOval(w - 82, 30, 48, 48);
+
+                g2.setColor(p.hill());
                 g2.fillOval(-60, h - 210, w / 2 + 90, 170);
                 g2.fillOval(w / 2 - 30, h - 230, w / 2 + 110, 190);
 
                 int groundY = h - 110;
-                g2.setColor(new Color(110, 175, 85));
+                g2.setColor(p.ground());
                 g2.fillRect(0, groundY, w, h - groundY);
-                g2.setColor(new Color(92, 150, 70));
+                g2.setColor(p.groundLine());
                 g2.fillRect(0, groundY, w, 6);
+
+                g2.setColor(new Color(p.grassHighlight().getRed(),
+                        p.grassHighlight().getGreen(), p.grassHighlight().getBlue(), 75));
+                for (int i = 10; i < w; i += 30) {
+                    g2.drawLine(i, groundY + 12, i + 4, groundY + 3);
+                    g2.drawLine(i, groundY + 12, i - 3, groundY + 4);
+                }
+
+                // Cụm lá trang trí ngoài khung.
+                g2.setColor(p.groundLine());
+                g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND,
+                        BasicStroke.JOIN_ROUND));
+                g2.drawLine(24, groundY + 6, 12, groundY - 10);
+                g2.setColor(p.hill());
+                g2.fillOval(2, groundY - 18, 22, 11);
+                g2.fillOval(15, groundY - 24, 18, 11);
+            } finally {
+                g2.dispose();
+            }
+        }
+    }
+
+    /** Thẻ nội dung bo góc, có bóng đổ nhẹ. */
+    private static final class CardPanel extends JPanel {
+
+        private static final long serialVersionUID = 1L;
+
+        private final ThemeManager theme;
+
+        CardPanel(ThemeManager theme) {
+            this.theme = theme;
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                        RenderingHints.VALUE_ANTIALIAS_ON);
+                ThemeManager.Palette p = theme.getPalette();
+                int w = getWidth();
+                int h = getHeight();
+                g2.setColor(new Color(0, 0, 0, 60));
+                g2.fill(new RoundRectangle2D.Float(3, 5, w - 6, h - 7, 28, 28));
+                g2.setColor(new Color(255, 255, 255, 236));
+                g2.fill(new RoundRectangle2D.Float(0, 0, w - 3, h - 5, 26, 26));
+                g2.setColor(new Color(p.groundLine().getRed(), p.groundLine().getGreen(),
+                        p.groundLine().getBlue(), 170));
+                g2.setStroke(new BasicStroke(2f));
+                g2.draw(new RoundRectangle2D.Float(1, 1, w - 5, h - 7, 26, 26));
             } finally {
                 g2.dispose();
             }

@@ -23,6 +23,9 @@ public class GameTest {
         testWrongQuizLosesLife();
         testAdvanceLevelKeepsLives();
         testWinAndNoActionAfterWin();
+        testWinAfterDefusedMine();
+        testWinAfterExplodedMine();
+        testWinFlagsQuestionMarkedMines();
         testRemainingMinesCanBeNegative();
         testInvalidCoordinates();
 
@@ -284,6 +287,107 @@ public class GameTest {
                     "Sau khi thắng không được reveal");
         }
         check(!game.toggleFlag(0, 0), "Sau khi thắng không được toggleFlag");
+    }
+
+    private static void testWinAfterDefusedMine() {
+        for (Difficulty difficulty : Difficulty.values()) {
+            for (int seed = 0; seed < 30; seed++) {
+                Game game = new Game(difficulty, new Random(seed));
+                game.reveal(0, 0);
+                Position mine = findHiddenMine(game);
+                check(mine != null, "Phải có bom để gỡ: " + difficulty + " seed=" + seed);
+                if (mine == null) {
+                    return;
+                }
+
+                game.reveal(mine.row(), mine.col());
+                check(game.isQuizPending(),
+                        "Mở trúng bom phải chờ câu đố: " + difficulty + " seed=" + seed);
+                game.resolveQuiz(true);
+                check(game.isDefused(mine.row(), mine.col()),
+                        "Bom phải được gỡ: " + difficulty + " seed=" + seed);
+
+                revealAllSafeCells(game);
+                checkEquals(GameStatus.WON, game.getStatus(),
+                        "Phải thắng sau khi gỡ bom và mở hết ô an toàn: "
+                                + difficulty + " seed=" + seed);
+                checkEquals(0, game.getRemainingMines(),
+                        "Thắng sau khi gỡ bom phải còn 0 bom: " + difficulty + " seed=" + seed);
+                checkEquals(CellState.REVEALED, game.getCellState(mine.row(), mine.col()),
+                        "Bom đã gỡ phải giữ trạng thái REVEALED: "
+                                + difficulty + " seed=" + seed);
+            }
+        }
+    }
+
+    private static void testWinAfterExplodedMine() {
+        for (Difficulty difficulty : Difficulty.values()) {
+            for (int seed = 0; seed < 30; seed++) {
+                Game game = new Game(difficulty, new Random(seed));
+                game.reveal(0, 0);
+                Position mine = findHiddenMine(game);
+                check(mine != null, "Phải có bom để làm nổ: " + difficulty + " seed=" + seed);
+                if (mine == null) {
+                    return;
+                }
+
+                game.reveal(mine.row(), mine.col());
+                game.resolveQuiz(false);
+                check(game.isExploded(mine.row(), mine.col()),
+                        "Bom phải nổ khi trả lời sai: " + difficulty + " seed=" + seed);
+                checkEquals(2, game.getLives(),
+                        "Sai một câu còn 2 mạng: " + difficulty + " seed=" + seed);
+
+                revealAllSafeCells(game);
+                checkEquals(GameStatus.WON, game.getStatus(),
+                        "Phải thắng sau khi bom nổ và mở hết ô an toàn: "
+                                + difficulty + " seed=" + seed);
+                checkEquals(0, game.getRemainingMines(),
+                        "Thắng sau khi bom nổ phải còn 0 bom: " + difficulty + " seed=" + seed);
+                checkEquals(CellState.REVEALED, game.getCellState(mine.row(), mine.col()),
+                        "Bom đã nổ phải giữ trạng thái REVEALED: "
+                                + difficulty + " seed=" + seed);
+            }
+        }
+    }
+
+    private static void testWinFlagsQuestionMarkedMines() {
+        for (Difficulty difficulty : Difficulty.values()) {
+            for (int seed = 0; seed < 30; seed++) {
+                Game game = new Game(difficulty, new Random(seed));
+                game.reveal(0, 0);
+                Position mine = findHiddenMine(game);
+                check(mine != null, "Phải có bom để đánh dấu ?: " + difficulty + " seed=" + seed);
+                if (mine == null) {
+                    return;
+                }
+
+                // HIDDEN -> FLAGGED -> QUESTION: ô "?" không tính vào bộ đếm cờ.
+                game.cycleMark(mine.row(), mine.col());
+                game.cycleMark(mine.row(), mine.col());
+                checkEquals(CellState.QUESTION, game.getCellState(mine.row(), mine.col()),
+                        "Ô bom phải đang ở trạng thái QUESTION: " + difficulty + " seed=" + seed);
+
+                revealAllSafeCells(game);
+                checkEquals(GameStatus.WON, game.getStatus(),
+                        "Phải thắng dù bom đang đánh dấu ?: " + difficulty + " seed=" + seed);
+                checkEquals(CellState.FLAGGED, game.getCellState(mine.row(), mine.col()),
+                        "Khi thắng, bom đánh dấu ? phải được tự cắm cờ: "
+                                + difficulty + " seed=" + seed);
+                checkEquals(0, game.getRemainingMines(),
+                        "Thắng phải đưa số bom còn lại về 0: " + difficulty + " seed=" + seed);
+            }
+        }
+    }
+
+    private static void revealAllSafeCells(Game game) {
+        for (int r = 0; r < game.getRows(); r++) {
+            for (int c = 0; c < game.getCols(); c++) {
+                if (!game.isMine(r, c) && game.getCellState(r, c) != CellState.REVEALED) {
+                    game.reveal(r, c);
+                }
+            }
+        }
     }
 
     private static void testRemainingMinesCanBeNegative() {

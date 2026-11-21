@@ -4,7 +4,10 @@ package model;
  * Một ô trên bàn cờ. Chỉ dùng nội bộ trong package model,
  * không lộ ra ngoài để tránh bị sửa đổi tùy tiện.
  */
-final class Cell {
+final class Cell implements java.io.Serializable {
+
+    private static final long serialVersionUID = 1L;
+
     private boolean mine;
     private int adjacentMines;
     private CellState state = CellState.HIDDEN;
