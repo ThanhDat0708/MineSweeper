@@ -48,7 +48,6 @@ public class MainFrame extends JFrame {
     private final RoundedButton hintButton;
     private final RoundedButton pauseButton;
     private final RoundedButton saveButton;
-    private final RoundedButton loadButton;
     private final RoundedButton themeButton;
     private final RoundedButton soundButton;
     private final JComboBox<String> modeBox;
@@ -84,8 +83,6 @@ public class MainFrame extends JFrame {
         pauseButton.setToolTipText("Tạm dừng / tiếp tục (Space)");
         saveButton = new RoundedButton("Lưu", themeManager, RoundedButton.Variant.SECONDARY);
         saveButton.setToolTipText("Lưu tiến trình (Ctrl+S)");
-        loadButton = new RoundedButton("Tải", themeManager, RoundedButton.Variant.SECONDARY);
-        loadButton.setToolTipText("Tải tiến trình đã lưu (Ctrl+L)");
         themeButton = new RoundedButton("Đổi theme", themeManager, RoundedButton.Variant.SECONDARY);
         themeButton.setToolTipText("Đổi bộ màu giao diện");
         soundButton = new RoundedButton("Âm thanh: Bật", themeManager,
@@ -138,7 +135,6 @@ public class MainFrame extends JFrame {
         toolBar.add(hintButton);
         toolBar.add(pauseButton);
         toolBar.add(saveButton);
-        toolBar.add(loadButton);
         toolBar.add(themeButton);
         toolBar.add(leaderboardButton);
         toolBar.add(soundButton);
@@ -185,7 +181,6 @@ public class MainFrame extends JFrame {
         bindShortcut("SPACE", () -> pauseButton.doClick());
         bindShortcut("H", () -> hintButton.doClick());
         bindShortcut("control S", () -> saveButton.doClick());
-        bindShortcut("control L", () -> loadButton.doClick());
     }
 
     private void bindShortcut(String keyStroke, Runnable action) {
@@ -341,8 +336,13 @@ public class MainFrame extends JFrame {
         saveButton.addActionListener(listener);
     }
 
-    public void addLoadListener(ActionListener listener) {
-        loadButton.addActionListener(listener);
+    /** Cập nhật số lượt gợi ý còn lại của màn hiện tại. */
+    public void setHintsRemaining(int remaining) {
+        int left = Math.max(0, remaining);
+        hintButton.setText("Gợi ý (" + left + ")");
+        hintButton.setToolTipText(left > 0
+                ? "Gợi ý một ô an toàn (H) - còn " + left + " lần"
+                : "Đã dùng hết gợi ý ở màn này");
     }
 
     public void addVolumeListener(ChangeListener listener) {

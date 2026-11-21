@@ -29,6 +29,7 @@ import java.util.Random;
 public class GameController {
 
     private static final int MAX_TIME = 999;
+    private static final int MAX_HINTS_PER_LEVEL = 2;
     private static final Path SAVE_FILE = Paths.get("savegame.dat");
 
     private final GameLogic logic;
@@ -42,6 +43,7 @@ public class GameController {
     private Difficulty currentDifficulty;
     private int elapsedSeconds;
     private int totalRunSeconds;
+    private int hintsUsed;
     private boolean timerStarted;
     private boolean pauseHeldTimer;
 
@@ -85,7 +87,6 @@ public class GameController {
         view.addHintListener(e -> showHint());
         view.addPauseListener(e -> togglePause());
         view.addSaveListener(e -> saveProgress());
-        view.addLoadListener(e -> loadProgress());
 
         sound.setEnabled(view.isSoundEnabled());
         sound.setVolume(view.getVolume());
@@ -137,12 +138,14 @@ public class GameController {
     }
 
     private void refreshBoard() {
+        hintsUsed = 0;
         view.rebuildGrid(logic.getRows(), logic.getCols());
         view.setPaused(false);
         view.clearHint();
         updateHud();
         view.setMineCounter(logic.getRemainingMines());
         view.setTime(0);
+        view.setHintsRemaining(MAX_HINTS_PER_LEVEL);
         view.refreshLayout();
     }
 
@@ -388,11 +391,18 @@ public class GameController {
         if (blocked()) {
             return;
         }
+        if (hintsUsed >= MAX_HINTS_PER_LEVEL) {
+            view.showInfoMessage("Bạn đã dùng hết " + MAX_HINTS_PER_LEVEL
+                    + " gợi ý ở màn này.");
+            return;
+        }
         Position hint = logic.findHint();
         if (hint == null) {
             view.showInfoMessage("Không còn ô an toàn nào để gợi ý.");
             return;
         }
+        hintsUsed++;
+        view.setHintsRemaining(MAX_HINTS_PER_LEVEL - hintsUsed);
         view.showHint(hint.row(), hint.col());
         view.setExpression(Expression.NORMAL, 0);
         sound.playHint();
@@ -406,39 +416,6 @@ public class GameController {
         } else {
             view.showInfoMessage("Không thể lưu tiến trình.");
         }
-    }
-
-    private void loadProgress() {
-        if (!logic.load(SAVE_FILE)) {
-            view.showInfoMessage("Không tìm thấy tiến trình đã lưu hoặc file bị hỏng.");
-            return;
-        }
-
-        stopTimer();
-        pauseHeldTimer = false;
-        timerStarted = false;
-        elapsedSeconds = logic.getLoadedElapsedSeconds();
-        totalRunSeconds = logic.getLoadedTotalSeconds();
-        currentDifficulty = logic.getDifficulty();
-
-        view.setSelectedModeIndex(currentDifficulty.ordinal());
-        view.rebuildGrid(logic.getRows(), logic.getCols());
-        view.setPaused(false);
-        view.clearHint();
-        updateHud();
-        view.setMineCounter(logic.getRemainingMines());
-        view.setTime(elapsedSeconds);
-        showAllCells(false);
-        view.setExpression(Expression.NORMAL, 0);
-        view.refreshLayout();
-
-        if (logic.wasLoadedTimerStarted()
-                && logic.getStatus() == GameStatus.PLAYING && !isGameOver()) {
-            timerStarted = true;
-            timer.start();
-        }
-        sound.playMark();
-        view.showInfoMessage("Đã tải tiến trình đã lưu.");
     }
 
     private void showCell(int row, int col, boolean animate) {
