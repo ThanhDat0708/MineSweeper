@@ -2,6 +2,20 @@
 
 Minesweeper - Khu rừng bom là trò chơi dò mìn được viết bằng Java và Java Swing. Dự án giữ luật dò mìn cơ bản nhưng bổ sung 10 màn chơi cho mỗi chế độ, ba mạng, câu đố trắc nghiệm, gợi ý, lưu tiến trình, bảng xếp hạng, theme giao diện và âm thanh.
 
+## Chơi ngay trên trình duyệt
+
+**[▶ Chơi Minesweeper - Khu rừng bom](https://thanhdat0708.github.io/MineSweeper/)**
+
+Bản web mở trực tiếp trên trình duyệt, không cần tải game hay cài Java. Bản này dành
+cho trải nghiệm nhanh và giữ các luật chính như ba chế độ, màn tăng độ khó, mở đầu an
+toàn, cờ, dấu hỏi, gợi ý, ba mạng và câu đố khi gặp bom. Thành tích bản web được lưu
+trên trình duyệt đang chơi.
+
+Ứng dụng Java Swing trong repository là bản desktop đầy đủ; hai bản chạy riêng và dữ
+liệu lưu/xếp hạng không đồng bộ với nhau. Nếu trang chơi chưa mở được, có thể GitHub
+Pages chưa hoàn tất triển khai; hãy thử lại sau khi workflow **Deploy browser game to
+GitHub Pages** chạy thành công.
+
 ## Tính năng
 
 - Ba chế độ: Beginner, Intermediate và Expert.

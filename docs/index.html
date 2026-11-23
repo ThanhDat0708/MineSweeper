@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#153b30">
+  <title>Minesweeper - Khu rừng bom | Chơi ngay</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #10251f;
+      --panel: #18382e;
+      --panel-light: #21483a;
+      --text: #f0f7ed;
+      --muted: #b6cabb;
+      --accent: #c9ef81;
+      --accent-ink: #20351a;
+      --cell: #739c75;
+      --cell-dark: #5c805f;
+      --open: #e4e6d4;
+      --line: #ffffff20;
+      --danger: #ff7777;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse at 75% 0%, #326c4c 0, transparent 38rem),
+        linear-gradient(145deg, #10251f, #132d25 60%, #1b3c30);
+      color: var(--text);
+      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+
+    .shell { width: min(1120px, 100%); margin: 0 auto; padding: 28px 18px 48px; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 22px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 15px; background: var(--accent); color: var(--accent-ink); font-size: 26px; }
+    h1 { margin: 0; font-size: clamp(21px, 4vw, 30px); line-height: 1.15; }
+    .subtitle { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+    .github { color: var(--muted); text-decoration: none; border: 1px solid var(--line); padding: 8px 12px; border-radius: 10px; white-space: nowrap; }
+    .github:hover { color: var(--text); border-color: var(--accent); }
+
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 18px; align-items: start; }
+    .game, .side-card { border: 1px solid var(--line); border-radius: 18px; background: #10271feb; box-shadow: 0 18px 55px #0003; }
+    .game { min-width: 0; padding: 18px; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+    .field { display: grid; gap: 5px; min-width: 128px; }
+    .field label { color: var(--muted); font-size: 12px; font-weight: 700; }
+    input, select { width: 100%; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; }
+    input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .actions { display: flex; gap: 8px; margin-left: auto; }
+    .btn { border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 750; }
+    .btn-primary { background: var(--accent); color: var(--accent-ink); }
+    .btn-secondary { background: var(--panel-light); color: var(--text); border: 1px solid var(--line); }
+    .btn:hover { filter: brightness(1.08); }
+    .btn:disabled { cursor: not-allowed; opacity: .48; }
+
+    .hud { display: grid; grid-template-columns: repeat(4, minmax(74px, 1fr)); gap: 8px; margin: 18px 0 14px; }
+    .stat { text-align: center; background: var(--panel); border: 1px solid var(--line); border-radius: 11px; padding: 8px; }
+    .stat-label { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+    .stat-value { display: block; font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .status { min-height: 26px; color: var(--muted); text-align: center; margin: 6px 0 12px; }
+
+    .board-wrap { overflow: auto; max-width: 100%; padding: 6px 2px 12px; }
+    .board { display: grid; width: max-content; gap: 3px; margin: 0 auto; padding: 5px; border-radius: 12px; background: #0c201a; touch-action: manipulation; }
+    .cell {
+      display: grid; place-items: center; width: clamp(27px, 4.2vw, 38px); aspect-ratio: 1;
+      border: 0; border-radius: 6px; background: linear-gradient(145deg, var(--cell), var(--cell-dark));
+      color: #17241b; font-size: clamp(14px, 2.7vw, 20px); font-weight: 900; line-height: 1;
+      box-shadow: inset 0 1px 0 #ffffff35, 0 2px 0 #0002;
+      user-select: none; -webkit-user-select: none;
+    }
+    .cell:hover:not(.revealed) { filter: brightness(1.12); }
+    .cell.revealed { background: var(--open); box-shadow: inset 0 0 0 1px #18251a12; }
+    .cell.flag { color: #a52e32; }
+    .cell.question { color: #263d7a; }
+    .cell.mine { background: #f2b2a1; }
+    .cell.exploded { background: var(--danger); }
+    .cell.hint { animation: pulse .7s ease-in-out 4 alternate; outline: 3px solid var(--accent); }
+    .n1 { color: #2764c4; } .n2 { color: #288548; } .n3 { color: #c33b36; }
+    .n4 { color: #4a3e98; } .n5 { color: #a0352e; } .n6 { color: #16828a; }
+    @keyframes pulse { to { filter: brightness(1.35); transform: scale(1.04); } }
+    .board-note { margin: 4px 0 0; text-align: center; color: var(--muted); font-size: 12px; }
+
+    aside { display: grid; gap: 14px; }
+    .side-card { padding: 16px; }
+    .side-card h2 { margin: 0 0 8px; font-size: 16px; }
+    .side-card p { margin: 0; color: var(--muted); font-size: 14px; }
+    .controls-list { display: grid; gap: 9px; padding: 0; margin: 0; list-style: none; }
+    .controls-list li { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 13px; }
+    kbd { color: var(--text); background: var(--panel-light); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
+    .callout { border-left: 3px solid var(--accent); padding-left: 11px; }
+    footer { margin-top: 20px; color: var(--muted); text-align: center; font-size: 12px; }
+
+    dialog { width: min(430px, calc(100% - 28px)); padding: 0; color: var(--text); background: #17362c; border: 1px solid #ffffff30; border-radius: 18px; box-shadow: 0 24px 80px #0009; }
+    dialog::backdrop { background: #07130fc9; backdrop-filter: blur(4px); }
+    .dialog-content { padding: 22px; }
+    .dialog-content h2 { margin: 0 0 8px; }
+    .dialog-content p { color: var(--muted); }
+    .answers { display: grid; gap: 9px; margin-top: 16px; }
+    .answer { text-align: left; background: var(--panel-light); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; }
+    .answer:hover { border-color: var(--accent); }
+    .dialog-actions { display: flex; justify-content: end; gap: 8px; margin-top: 16px; }
+    .quiz-result { min-height: 24px; font-weight: 750; }
+    .quiz-result.good { color: var(--accent); } .quiz-result.bad { color: #ff9999; }
+
+    @media (max-width: 800px) {
+      .layout { grid-template-columns: 1fr; }
+      aside { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .side-card:first-child { grid-column: 1 / -1; }
+    }
+    @media (max-width: 520px) {
+      .shell { padding: 16px 10px 30px; }
+      header { align-items: flex-start; }
+      .github { font-size: 12px; padding: 7px 9px; }
+      .game { padding: 12px 8px; }
+      .toolbar { align-items: stretch; }
+      .field { flex: 1 1 125px; }
+      .actions { width: 100%; margin-left: 0; }
+      .actions .btn { flex: 1; }
+      .hud { grid-template-columns: repeat(2, 1fr); }
+      aside { grid-template-columns: 1fr; }
+      .side-card:first-child { grid-column: auto; }
+      .cell { width: clamp(25px, 8.3vw, 34px); }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">✹</div>
+        <div>
+          <h1>Minesweeper</h1>
+          <p class="subtitle">Khu rừng bom · bản chơi trên trình duyệt</p>
+        </div>
+      </div>
+      <a class="github" href="https://github.com/ThanhDat0708/MineSweeper">Mã nguồn GitHub ↗</a>
+    </header>
+
+    <div class="layout">
+      <section class="game" aria-label="Trò chơi dò mìn">
+        <div class="toolbar">
+          <div class="field">
+            <label for="player">Tên người chơi</label>
+            <input id="player" maxlength="20" autocomplete="nickname" placeholder="Người chơi">
+          </div>
+          <div class="field">
+            <label for="difficulty">Độ khó</label>
+            <select id="difficulty">
+              <option value="BEGINNER">Beginner · 9×9</option>
+              <option value="INTERMEDIATE">Intermediate · 16×16</option>
+              <option value="EXPERT">Expert · 16×30</option>
+            </select>
+          </div>
+          <div class="actions">
+            <button id="new-game" class="btn btn-primary" type="button">Ván mới</button>
+            <button id="hint" class="btn btn-secondary" type="button">Gợi ý <span id="hint-count">2</span></button>
+            <button id="pause" class="btn btn-secondary" type="button">Tạm dừng</button>
+          </div>
+        </div>
+
+        <div class="hud" aria-live="polite">
+          <div class="stat"><span class="stat-label">Bom còn lại</span><span id="mines" class="stat-value">8</span></div>
+          <div class="stat"><span class="stat-label">Thời gian</span><span id="time" class="stat-value">000</span></div>
+          <div class="stat"><span class="stat-label">Màn</span><span id="level" class="stat-value">1 / 10</span></div>
+          <div class="stat"><span class="stat-label">Mạng</span><span id="lives" class="stat-value">❤️❤️❤️</span></div>
+        </div>
+        <p id="status" class="status" role="status">Chọn một ô để bắt đầu. Lần mở đầu luôn an toàn.</p>
+        <div class="board-wrap">
+          <div id="board" class="board" role="grid" aria-label="Bàn cờ dò mìn"></div>
+        </div>
+        <p class="board-note">Nhấp đúp vào ô số để mở nhanh các ô xung quanh khi đã cắm đủ cờ.</p>
+      </section>
+
+      <aside>
+        <section class="side-card">
+          <h2>Cách chơi nhanh</h2>
+          <p class="callout">Mở hết các ô an toàn để qua màn. Con số trên ô cho biết có bao nhiêu bom trong tám ô lân cận.</p>
+        </section>
+        <section class="side-card">
+          <h2>Điều khiển</h2>
+          <ul class="controls-list">
+            <li><span>Mở ô</span><kbd>Chuột trái</kbd></li>
+            <li><span>Cắm cờ / dấu hỏi</span><kbd>Chuột phải</kbd></li>
+            <li><span>Mở nhanh quanh ô số</span><kbd>Nhấp đúp</kbd></li>
+            <li><span>Gợi ý</span><kbd>H</kbd></li>
+            <li><span>Tạm dừng</span><kbd>Space</kbd></li>
+            <li><span>Ván mới</span><kbd>N</kbd></li>
+          </ul>
+        </section>
+        <section class="side-card">
+          <h2>Luật đặc biệt</h2>
+          <p>Khi mở trúng bom, trả lời câu đố để gỡ bom. Trả lời sai làm mất một mạng. Sang màn mới giữ nguyên số mạng còn lại.</p>
+        </section>
+        <section class="side-card">
+          <h2>Tiến trình</h2>
+          <p>Đây là bản web trải nghiệm. Thành tích được lưu trên trình duyệt hiện tại; game Java trên máy tính vẫn là bản đầy đủ.</p>
+        </section>
+      </aside>
+    </div>
+    <footer>Chơi miễn phí trên trình duyệt · Không cần tải ứng dụng hay cài Java</footer>
+  </main>
+
+  <dialog id="quiz-dialog" aria-labelledby="quiz-title">
+    <div class="dialog-content">
+      <h2 id="quiz-title">Bom đang chờ câu trả lời!</h2>
+      <p id="quiz-question"></p>
+      <p id="quiz-result" class="quiz-result" aria-live="polite"></p>
+      <div id="answers" class="answers"></div>
+      <div class="dialog-actions">
+        <button id="quiz-close" class="btn btn-secondary" type="button" hidden>Tiếp tục</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="result-dialog" aria-labelledby="result-title">
+    <div class="dialog-content">
+      <h2 id="result-title"></h2>
+      <p id="result-message"></p>
+      <div class="dialog-actions">
+        <button id="result-action" class="btn btn-primary" type="button">Tiếp tục</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const modes = {
+        BEGINNER: { rows: 9, cols: 9, min: 8, max: 17 },
+        INTERMEDIATE: { rows: 16, cols: 16, min: 28, max: 46 },
+        EXPERT: { rows: 16, cols: 30, min: 65, max: 101 }
+      };
+      const riddles = [
+        ["Con gì càng to càng nhỏ?", ["Con cua", "Con voi", "Con kiến", "Con rùa"], 0],
+        ["Cái gì càng rửa càng bẩn?", ["Nước", "Xà phòng", "Khăn lau", "Bàn chải"], 0],
+        ["Cái gì có răng mà không có miệng?", ["Cái lược", "Cái cốc", "Cái ghế", "Cái bút"], 0],
+        ["Một năm có bao nhiêu tháng có 28 ngày?", ["1 tháng", "6 tháng", "12 tháng", "2 tháng"], 2],
+        ["Cái gì đi khắp thế giới mà vẫn ở một chỗ?", ["Con tem", "Con chim", "Mặt trời", "Cái bóng"], 0],
+        ["5 con mèo bắt 5 con chuột trong 5 phút. 100 con mèo bắt 100 con chuột trong bao lâu?", ["5 phút", "100 phút", "20 phút", "1 phút"], 0],
+        ["Cái gì càng đào càng lớn?", ["Cái hố", "Cái ao", "Cái giếng", "Cái bóng"], 0],
+        ["Bạn có 3 quả táo và lấy 2 quả. Bạn có bao nhiêu quả?", ["1 quả", "2 quả", "3 quả", "0 quả"], 1],
+        ["Đi 10 km về phía bắc, rẽ phải 10 km, rẽ phải 10 km, rẽ phải 10 km. Bạn đang ở đâu?", ["Điểm xuất phát", "Cách điểm xuất phát 10 km", "Cách điểm xuất phát 20 km", "Không xác định"], 0],
+        ["Cái gì thuộc về bạn nhưng người khác dùng nhiều hơn bạn?", ["Tên của bạn", "Điện thoại", "Tiền", "Nhà"], 0]
+      ];
+
+      const $ = (id) => document.getElementById(id);
+      const boardEl = $("board");
+      const statusEl = $("status");
+      let game;
+      let timerId = null;
+      let pendingMine = null;
+      let quizLocked = false;
+      let flagPointer = false;
+
+      function mineCountFor(mode, level) {
+        return mode.min + Math.floor((mode.max - mode.min) * (level - 1) / 9);
+      }
+
+      function startRun(modeKey = $("difficulty").value, level = 1, lives = 3, totalSeconds = 0) {
+        stopTimer();
+        const mode = modes[modeKey];
+        const mines = mineCountFor(mode, level);
+        game = {
+          modeKey, mode, level, rows: mode.rows, cols: mode.cols, mines,
+          cells: Array.from({ length: mode.rows * mode.cols }, () => ({
+            mine: false, adjacent: 0, state: "hidden", defused: false, exploded: false
+          })),
+          minesPlaced: false, revealedSafe: 0, flags: 0, defused: 0, exploded: 0,
+          lives, status: "READY", pending: null, hints: 2, elapsed: 0,
+          totalSeconds, timerStarted: false, paused: false
+        };
+        $("difficulty").value = modeKey;
+        $("hint-count").textContent = "2";
+        $("pause").textContent = "Tạm dừng";
+        $("pause").disabled = false;
+        $("hint").disabled = false;
+        $("level").textContent = `${level} / 10`;
+        $("time").textContent = "000";
+        statusEl.textContent = "Chọn một ô để bắt đầu. Lần mở đầu luôn an toàn.";
+        render();
+        updateHud();
+      }
+
+      function stopTimer() {
+        if (timerId !== null) clearInterval(timerId);
+        timerId = null;
+      }
+
+      function startTimer() {
+        if (game.timerStarted) return;
+        game.timerStarted = true;
+        game.status = "PLAYING";
+        timerId = setInterval(() => {
+          if (!game.paused && game.elapsed < 999) {
+            game.elapsed += 1;
+            $("time").textContent = String(game.elapsed).padStart(3, "0");
+          }
+        }, 1000);
+      }
+
+      function indexOf(row, col) { return row * game.cols + col; }
+      function inBounds(row, col) { return row >= 0 && row < game.rows && col >= 0 && col < game.cols; }
+      function neighbors(row, col) {
+        const result = [];
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+          if ((dr || dc) && inBounds(row + dr, col + dc)) result.push([row + dr, col + dc]);
+        }
+        return result;
+      }
+
+      function placeMines(safeRow, safeCol) {
+        let candidates = [];
+        for (let row = 0; row < game.rows; row++) for (let col = 0; col < game.cols; col++) {
+          if (Math.abs(row - safeRow) > 1 || Math.abs(col - safeCol) > 1) candidates.push(indexOf(row, col));
+        }
+        if (candidates.length < game.mines) {
+          candidates = Array.from({ length: game.rows * game.cols }, (_, i) => i)
+            .filter(i => i !== indexOf(safeRow, safeCol));
+        }
+        for (let i = candidates.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+        }
+        candidates.slice(0, game.mines).forEach(i => { game.cells[i].mine = true; });
+        for (let row = 0; row < game.rows; row++) for (let col = 0; col < game.cols; col++) {
+          game.cells[indexOf(row, col)].adjacent = neighbors(row, col)
+            .filter(([r, c]) => game.cells[indexOf(r, c)].mine).length;
+        }
+        game.minesPlaced = true;
+      }
+
+      function reveal(row, col) {
+        if (game.paused || game.pending || game.status === "WON" || game.status === "LOST") return;
+        const start = game.cells[indexOf(row, col)];
+        if (start.state === "revealed" || start.state === "flag") return;
+        if (!game.minesPlaced) placeMines(row, col);
+        startTimer();
+        if (start.mine) {
+          game.pending = [row, col];
+          pendingMine = [row, col];
+          askQuiz();
+          return;
+        }
+
+        const queue = [[row, col]];
+        const queued = new Set([indexOf(row, col)]);
+        while (queue.length) {
+          const [r, c] = queue.shift();
+          const cell = game.cells[indexOf(r, c)];
+          if (cell.state === "revealed" || cell.state === "flag" || cell.mine) continue;
+          cell.state = "revealed";
+          game.revealedSafe++;
+          if (cell.adjacent === 0) for (const [nr, nc] of neighbors(r, c)) {
+            const neighbor = game.cells[indexOf(nr, nc)];
+            const ni = indexOf(nr, nc);
+            if ((neighbor.state === "hidden" || neighbor.state === "question") && !neighbor.mine && !queued.has(ni)) {
+              queue.push([nr, nc]);
+              queued.add(ni);
+            }
+          }
+        }
+        checkWin();
+        render();
+        updateHud();
+      }
+
+      function mark(row, col) {
+        if (game.paused || game.pending || game.status === "WON" || game.status === "LOST") return;
+        const cell = game.cells[indexOf(row, col)];
+        if (cell.state === "revealed") return;
+        if (cell.state === "hidden") { cell.state = "flag"; game.flags++; }
+        else if (cell.state === "flag") { cell.state = "question"; game.flags--; }
+        else { cell.state = "hidden"; }
+        render();
+        updateHud();
+      }
+
+      function chord(row, col) {
+        const center = game.cells[indexOf(row, col)];
+        if (center.state !== "revealed" || center.adjacent === 0 || game.paused || game.pending) return;
+        const around = neighbors(row, col);
+        if (around.filter(([r, c]) => game.cells[indexOf(r, c)].state === "flag").length !== center.adjacent) return;
+        for (const [r, c] of around) {
+          const cell = game.cells[indexOf(r, c)];
+          if (cell.state === "hidden" || cell.state === "question") {
+            reveal(r, c);
+            if (game.pending || game.status === "WON" || game.status === "LOST") break;
+          }
+        }
+      }
+
+      function updateHud() {
+        $("mines").textContent = String(game.mines - game.flags - game.defused - game.exploded);
+        $("lives").textContent = "❤️".repeat(game.lives) + "🩶".repeat(3 - game.lives);
+        $("level").textContent = `${game.level} / 10`;
+        $("hint-count").textContent = String(game.hints);
+        $("hint").disabled = game.hints === 0 || game.status === "WON" || game.status === "LOST";
+      }
+
+      function render() {
+        boardEl.replaceChildren();
+        boardEl.style.gridTemplateColumns = `repeat(${game.cols}, auto)`;
+        boardEl.setAttribute("aria-rowcount", String(game.rows));
+        boardEl.setAttribute("aria-colcount", String(game.cols));
+        game.cells.forEach((cell, i) => {
+          const row = Math.floor(i / game.cols);
+          const col = i % game.cols;
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "cell";
+          button.setAttribute("role", "gridcell");
+          button.setAttribute("aria-label", `Hàng ${row + 1}, cột ${col + 1}`);
+          if (cell.state === "revealed") {
+            button.classList.add("revealed");
+            if (cell.mine) {
+              button.textContent = cell.defused ? "🛡️" : "✹";
+              button.classList.add(cell.exploded ? "exploded" : "mine");
+            } else if (cell.adjacent) {
+              button.textContent = String(cell.adjacent);
+              button.classList.add(`n${cell.adjacent}`);
+              button.setAttribute("aria-label", `Hàng ${row + 1}, cột ${col + 1}, ${cell.adjacent} bom xung quanh`);
+            }
+          } else if (cell.state === "flag") {
+            button.textContent = "⚑";
+            button.classList.add("flag");
+            button.setAttribute("aria-label", `Hàng ${row + 1}, cột ${col + 1}, cắm cờ`);
+          } else if (cell.state === "question") {
+            button.textContent = "?";
+            button.classList.add("question");
+          }
+          button.addEventListener("click", () => reveal(row, col));
+          button.addEventListener("contextmenu", event => { event.preventDefault(); mark(row, col); });
+          button.addEventListener("dblclick", event => { event.preventDefault(); chord(row, col); });
+          boardEl.append(button);
+        });
+      }
+
+      function checkWin() {
+        if (game.revealedSafe !== game.rows * game.cols - game.mines) return;
+        game.status = "WON";
+        stopTimer();
+        game.cells.forEach(cell => { if (cell.mine && cell.state !== "revealed") { cell.state = "flag"; game.flags++; } });
+        updateHud();
+        render();
+        const total = game.totalSeconds + game.elapsed;
+        if (game.level === 10) {
+          saveScore(total);
+          $("result-title").textContent = "Bạn đã hoàn thành cuộc chơi!";
+          $("result-message").textContent = `${$("player").value.trim() || "Người chơi"} vượt qua 10 màn trong ${formatTime(total)}. Thành tích được lưu trên trình duyệt này.`;
+          $("result-action").textContent = "Chơi lượt mới";
+          $("result-action").onclick = () => { $("result-dialog").close(); startRun(); };
+        } else {
+          $("result-title").textContent = `Hoàn thành màn ${game.level}!`;
+          $("result-message").textContent = `Bạn còn ${game.lives} mạng. Tiếp tục sang màn ${game.level + 1}?`;
+          $("result-action").textContent = "Sang màn tiếp";
+          $("result-action").onclick = () => {
+            const next = { modeKey: game.modeKey, level: game.level + 1, lives: game.lives, total: total };
+            $("result-dialog").close();
+            startRun(next.modeKey, next.level, next.lives, next.total);
+          };
+        }
+        $("result-dialog").showModal();
+      }
+
+      function saveScore(total) {
+        const key = "minesweeper-web-best";
+        const scores = JSON.parse(localStorage.getItem(key) || "[]");
+        scores.push({
+          name: $("player").value.trim().slice(0, 20) || "Người chơi",
+          mode: game.modeKey,
+          seconds: total,
+          date: new Date().toISOString()
+        });
+        localStorage.setItem(key, JSON.stringify(scores.slice(-20)));
+      }
+
+      function formatTime(seconds) {
+        return `${Math.floor(seconds / 60)} phút ${seconds % 60} giây`;
+      }
+
+      function nextQuiz(level) {
+        if (Math.random() < 0.45) {
+          const [question, rawOptions, answer] = riddles[level - 1];
+          const options = rawOptions.map((text, i) => ({ text, correct: i === answer }));
+          for (let i = options.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [options[i], options[j]] = [options[j], options[i]];
+          }
+          return { question, options };
+        }
+        let a, b, c, d, question, answer;
+        switch (level) {
+          case 1: a = 1 + Math.floor(Math.random() * 9); b = 1 + Math.floor(Math.random() * 9); question = `${a} + ${b} = ?`; answer = a + b; break;
+          case 2: a = 10 + Math.floor(Math.random() * 20); b = 1 + Math.floor(Math.random() * 9); question = `${a} - ${b} = ?`; answer = a - b; break;
+          case 3: a = 2 + Math.floor(Math.random() * 8); b = 2 + Math.floor(Math.random() * 8); question = `${a} × ${b} = ?`; answer = a * b; break;
+          case 4: a = 2 + Math.floor(Math.random() * 9); b = 2 + Math.floor(Math.random() * 9); c = 1 + Math.floor(Math.random() * 20); question = `${a} × ${b} + ${c} = ?`; answer = a * b + c; break;
+          case 5: a = 3 + Math.floor(Math.random() * 9); b = 2 + Math.floor(Math.random() * 9); c = 1 + Math.floor(Math.random() * (a * b - 1)); question = `${a} × ${b} - ${c} = ?`; answer = a * b - c; break;
+          case 6: a = 2 + Math.floor(Math.random() * 9); b = 2 + Math.floor(Math.random() * 9); c = 2 + Math.floor(Math.random() * 5); question = `(${a} + ${b}) × ${c} = ?`; answer = (a + b) * c; break;
+          case 7: a = 2 + Math.floor(Math.random() * 9); b = 1 + Math.floor(Math.random() * 20); question = `${a}² + ${b} = ?`; answer = a * a + b; break;
+          case 8: a = (1 + Math.floor(Math.random() * 9)) * 10; b = (2 + Math.floor(Math.random() * 19)) * 10; question = `${a}% của ${b} = ?`; answer = a * b / 100; break;
+          case 9: a = 10 + Math.floor(Math.random() * 30); b = 2 + Math.floor(Math.random() * 8); c = 2 + Math.floor(Math.random() * 8); d = 1 + Math.floor(Math.random() * 20); question = `(${a} + ${b}) × ${c} - ${d} = ?`; answer = (a + b) * c - d; break;
+          default: a = 3 + Math.floor(Math.random() * 12); b = 3 + Math.floor(Math.random() * 12); c = 2 + Math.floor(Math.random() * 9); d = 2 + Math.floor(Math.random() * 9); question = `${a} × ${b} + ${c} × ${d} = ?`; answer = a * b + c * d;
+        }
+        const choices = new Set([answer]);
+        while (choices.size < 4) {
+          let candidate = answer + (Math.floor(Math.random() * 31) - 15);
+          if (candidate < 0) candidate = Math.abs(candidate) + 1;
+          choices.add(candidate);
+        }
+        const options = [...choices].map(value => ({ text: String(value), correct: value === answer }));
+        for (let i = options.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [options[i], options[j]] = [options[j], options[i]];
+        }
+        return { question, options };
+      }
+
+      function askQuiz() {
+        game.paused = true;
+        stopTimer();
+        const quiz = nextQuiz(game.level);
+        $("quiz-question").textContent = quiz.question;
+        $("quiz-result").textContent = "";
+        $("quiz-result").className = "quiz-result";
+        $("quiz-close").hidden = true;
+        $("answers").replaceChildren();
+        quiz.options.forEach(option => {
+          const button = document.createElement("button");
+          button.className = "answer";
+          button.type = "button";
+          button.textContent = option.text;
+          button.addEventListener("click", () => resolveQuiz(option.correct));
+          $("answers").append(button);
+        });
+        $("quiz-dialog").showModal();
+      }
+
+      function resolveQuiz(correct) {
+        if (quizLocked || !game.pending) return;
+        quizLocked = true;
+        const [row, col] = game.pending;
+        const cell = game.cells[indexOf(row, col)];
+        game.pending = null;
+        pendingMine = null;
+        cell.state = "revealed";
+        if (correct) {
+          cell.defused = true;
+          game.defused++;
+          $("quiz-result").textContent = "Chính xác! Bom đã được vô hiệu hóa.";
+          $("quiz-result").classList.add("good");
+        } else {
+          cell.exploded = true;
+          game.exploded++;
+          game.lives--;
+          $("quiz-result").textContent = `Chưa đúng! Bạn còn ${game.lives} mạng.`;
+          $("quiz-result").classList.add("bad");
+        }
+        $("answers").querySelectorAll("button").forEach(button => { button.disabled = true; });
+        $("quiz-close").hidden = false;
+        updateHud();
+        render();
+        $("quiz-close").onclick = () => {
+          $("quiz-dialog").close();
+          quizLocked = false;
+          if (game.lives <= 0) finishLoss();
+          else {
+            game.paused = false;
+            if (game.timerStarted) timerId = setInterval(() => {
+              if (!game.paused && game.elapsed < 999) {
+                game.elapsed++;
+                $("time").textContent = String(game.elapsed).padStart(3, "0");
+              }
+            }, 1000);
+            statusEl.textContent = correct ? "Bom đã được gỡ. Tiếp tục dò mìn!" : "Bạn mất một mạng. Hãy cẩn thận!";
+          }
+        };
+      }
+
+      function finishLoss() {
+        stopTimer();
+        game.status = "LOST";
+        game.paused = true;
+        game.cells.forEach(cell => { if (cell.mine) cell.state = "revealed"; });
+        render();
+        $("hint").disabled = true;
+        $("pause").disabled = true;
+        statusEl.textContent = "Hết mạng. Lượt chơi đã kết thúc.";
+        $("result-title").textContent = "Hết mạng!";
+        $("result-message").textContent = "Đừng nản chí, hãy thử lại một lượt mới.";
+        $("result-action").textContent = "Chơi lại";
+        $("result-action").onclick = () => { $("result-dialog").close(); startRun(); };
+        $("result-dialog").showModal();
+      }
+
+      function showHint() {
+        if (game.paused || game.hints <= 0 || game.status === "WON" || game.status === "LOST") return;
+        const choices = game.cells.map((cell, i) => ({ cell, i }))
+          .filter(({ cell }) => cell.state !== "revealed" && cell.state !== "flag" && (!game.minesPlaced || !cell.mine));
+        if (!choices.length) { statusEl.textContent = "Không còn ô an toàn để gợi ý."; return; }
+        const { i } = choices[Math.floor(Math.random() * choices.length)];
+        const button = boardEl.children[i];
+        button.classList.add("hint");
+        game.hints--;
+        updateHud();
+        statusEl.textContent = "Ô viền sáng là một gợi ý an toàn. Gợi ý không tự mở ô.";
+        setTimeout(() => button.classList.remove("hint"), 3000);
+      }
+
+      $("new-game").addEventListener("click", () => startRun());
+      $("difficulty").addEventListener("change", () => startRun());
+      $("hint").addEventListener("click", showHint);
+      $("pause").addEventListener("click", () => {
+        if (game.status === "WON" || game.status === "LOST" || game.pending) return;
+        game.paused = !game.paused;
+        $("pause").textContent = game.paused ? "Tiếp tục" : "Tạm dừng";
+        statusEl.textContent = game.paused ? "Đã tạm dừng." : "Tiếp tục dò mìn!";
+      });
+      $("quiz-close").addEventListener("click", () => {});
+      document.addEventListener("keydown", event => {
+        if (event.key.toLowerCase() === "h" && !event.repeat) showHint();
+        if (event.code === "Space" && event.target.tagName !== "BUTTON") {
+          event.preventDefault();
+          $("pause").click();
+        }
+        if (event.key.toLowerCase() === "n" && event.target.tagName !== "INPUT") startRun();
+      });
+      boardEl.addEventListener("pointerdown", event => { flagPointer = event.button === 2; });
+      boardEl.addEventListener("contextmenu", event => event.preventDefault());
+
+      const playerKey = "minesweeper-web-player";
+      $("player").value = localStorage.getItem(playerKey) || "";
+      $("player").addEventListener("change", () => localStorage.setItem(playerKey, $("player").value.trim().slice(0, 20)));
+      startRun();
+    })();
+  </script>
+</body>
+</html>
