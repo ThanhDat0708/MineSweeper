@@ -1,9 +1,11 @@
 package view;
 
 import javax.swing.AbstractAction;
+import javax.swing.AbstractButton;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
+import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JList;
 import javax.swing.JLabel;
@@ -11,11 +13,13 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSlider;
 import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.ChangeListener;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -25,6 +29,8 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.awt.geom.RoundRectangle2D;
 
 /**
@@ -371,14 +377,51 @@ public class MainFrame extends JFrame {
      * hoặc -1 nếu đóng hộp thoại.
      */
     public int askQuiz(String question, String[] options) {
-        return JOptionPane.showOptionDialog(this,
+        JOptionPane pane = new JOptionPane(
                 question + "\n\nTrả lời đúng để vô hiệu hóa quả bom!",
-                "Thử thách gỡ bom",
-                JOptionPane.DEFAULT_OPTION,
                 JOptionPane.QUESTION_MESSAGE,
+                JOptionPane.DEFAULT_OPTION,
                 null,
                 options,
-                options.length > 0 ? options[0] : null);
+                null);
+        pane.setFocusable(true);
+        JDialog dialog = pane.createDialog(this, "Thử thách gỡ bom");
+        removeButtonFocusRing(pane);
+        // Đưa tiêu điểm ra khỏi các nút để không nút nào bị tô sáng,
+        // tránh người chơi hiểu nhầm đó là gợi ý đáp án đúng.
+        dialog.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowOpened(WindowEvent e) {
+                SwingUtilities.invokeLater(pane::requestFocusInWindow);
+            }
+        });
+        dialog.setVisible(true);
+        dialog.dispose();
+
+        Object selected = pane.getValue();
+        if (selected instanceof Integer index) {
+            return (index >= 0 && index < options.length) ? index : -1;
+        }
+        if (selected != null) {
+            for (int i = 0; i < options.length; i++) {
+                if (options[i].equals(selected)) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    /** Tắt viền tiêu điểm của các nút đáp án để không trông như đang gợi ý. */
+    private static void removeButtonFocusRing(Component component) {
+        if (component instanceof AbstractButton button) {
+            button.setFocusPainted(false);
+        }
+        if (component instanceof Container container) {
+            for (Component child : container.getComponents()) {
+                removeButtonFocusRing(child);
+            }
+        }
     }
 
     public void showInfoMessage(String message) {

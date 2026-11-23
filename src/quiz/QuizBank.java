@@ -52,9 +52,14 @@ public final class QuizBank {
 
     private Quiz riddle(int level) {
         String[] data = RIDDLES[level - 1];
-        return new Quiz(data[0],
-                new String[]{data[1], data[2], data[3], data[4]},
-                Integer.parseInt(data[5]));
+        List<String> options = new ArrayList<>();
+        for (int i = 1; i <= 4; i++) {
+            options.add(data[i]);
+        }
+        String correctAnswer = options.get(Integer.parseInt(data[5]));
+        Collections.shuffle(options, random);
+        return new Quiz(data[0], options.toArray(new String[0]),
+                options.indexOf(correctAnswer));
     }
 
     private Quiz arithmetic(int level) {

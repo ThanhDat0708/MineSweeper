@@ -24,6 +24,7 @@ public class StartController {
         this.leaderboard = new Leaderboard();
         this.leaderboard.load();
         this.view = new StartFrame();
+        view.setPlayerNames(leaderboard.playerNames());
 
         view.addStartListener(e -> onStart());
         view.addLeaderboardListener(e -> onShowLeaderboard());

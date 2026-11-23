@@ -97,6 +97,26 @@ public final class Leaderboard {
         save();
     }
 
+    /** Danh sách tên người chơi từng có thành tích, không trùng và xếp theo ABC. */
+    public List<String> playerNames() {
+        List<String> names = new ArrayList<>();
+        for (ScoreEntry entry : entries) {
+            String name = entry.playerName();
+            boolean exists = false;
+            for (String kept : names) {
+                if (kept.equalsIgnoreCase(name)) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                names.add(name);
+            }
+        }
+        names.sort(String.CASE_INSENSITIVE_ORDER);
+        return names;
+    }
+
     /**
      * Chuyển bảng xếp hạng thành các dòng text để view hiển thị,
      * nhờ vậy tầng view không cần phụ thuộc vào package score.

@@ -7,7 +7,6 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import java.awt.BasicStroke;
@@ -21,6 +20,7 @@ import java.awt.GridBagLayout;
 import java.awt.RenderingHints;
 import java.awt.event.ActionListener;
 import java.awt.geom.RoundRectangle2D;
+import java.util.List;
 
 /**
  * Màn hình bắt đầu: nhập tên người chơi, chọn độ khó, vào game hoặc xem bảng xếp hạng.
@@ -34,7 +34,7 @@ public class StartFrame extends JFrame {
     private static final String[] MODE_NAMES = {"Beginner", "Intermediate", "Expert"};
 
     private final ThemeManager themeManager = new ThemeManager();
-    private final JTextField nameField = new JTextField(16);
+    private final JComboBox<String> nameBox = new JComboBox<>();
     private final JComboBox<String> modeBox = new JComboBox<>(MODE_NAMES);
     private final RoundedButton startButton =
             new RoundedButton("Bắt đầu", themeManager, RoundedButton.Variant.PRIMARY);
@@ -76,9 +76,11 @@ public class StartFrame extends JFrame {
         nameLabel.setForeground(new Color(45, 80, 60));
         nameLabel.setAlignmentX(LEFT_ALIGNMENT);
 
-        nameField.setFont(ThemeManager.font(Font.PLAIN, 15));
-        nameField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-        nameField.setAlignmentX(LEFT_ALIGNMENT);
+        nameBox.setEditable(true);
+        nameBox.setFont(ThemeManager.font(Font.PLAIN, 15));
+        nameBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+        nameBox.setAlignmentX(LEFT_ALIGNMENT);
+        nameBox.setPrototypeDisplayValue("MMMMMMMMMMMMMMMMMMMM");
 
         JLabel modeLabel = new JLabel("Độ khó");
         modeLabel.setFont(ThemeManager.font(Font.BOLD, 13));
@@ -98,7 +100,7 @@ public class StartFrame extends JFrame {
         card.add(Box.createVerticalStrut(22));
         card.add(nameLabel);
         card.add(Box.createVerticalStrut(6));
-        card.add(nameField);
+        card.add(nameBox);
         card.add(Box.createVerticalStrut(14));
         card.add(modeLabel);
         card.add(Box.createVerticalStrut(6));
@@ -116,7 +118,21 @@ public class StartFrame extends JFrame {
     }
 
     public String getPlayerName() {
-        return nameField.getText();
+        Object item = nameBox.getEditor().getItem();
+        return (item != null) ? item.toString() : "";
+    }
+
+    /** Nạp danh sách người chơi cũ để chọn nhanh thay vì gõ tên mới. */
+    public void setPlayerNames(List<String> names) {
+        nameBox.removeAllItems();
+        if (names != null) {
+            for (String name : names) {
+                if (name != null && !name.trim().isEmpty()) {
+                    nameBox.addItem(name);
+                }
+            }
+        }
+        nameBox.getEditor().setItem("");
     }
 
     public int getSelectedModeIndex() {
@@ -137,7 +153,12 @@ public class StartFrame extends JFrame {
     }
 
     public void focusNameField() {
-        SwingUtilities.invokeLater(nameField::requestFocusInWindow);
+        SwingUtilities.invokeLater(() -> {
+            nameBox.requestFocusInWindow();
+            if (nameBox.isEditable() && nameBox.getEditor().getEditorComponent() != null) {
+                nameBox.getEditor().getEditorComponent().requestFocusInWindow();
+            }
+        });
     }
 
     /** Nền trời - đồi - mặt đất vẽ bằng Graphics2D cho đồng bộ với bảng nhân vật. */
